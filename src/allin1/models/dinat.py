@@ -7,9 +7,38 @@ import math
 import torch
 from abc import ABC,  abstractmethod
 from typing import Optional, Tuple, Callable
-from natten.functional import natten1dav, natten1dqkrpb, natten2dav, natten2dqkrpb
+from . import natten_torch
 from ..config import Config
 from .utils import *
+
+try:
+  from natten import functional as natten_kernels
+  # NATTEN removed these names after 0.15; a newer NATTEN counts as absent here.
+  _NATTEN_NAMES = ('natten1dav', 'natten1dqkrpb', 'natten2dav', 'natten2dqkrpb')
+  if not all(hasattr(natten_kernels, name) for name in _NATTEN_NAMES):
+    natten_kernels = None
+except ImportError:
+  natten_kernels = None
+
+
+def _neighborhood_attention(name: str) -> Callable:
+  """NATTEN's CUDA kernel for a CUDA tensor; otherwise the plain PyTorch
+  implementation, which runs on any device, Apple's MPS backend included. On the
+  CPU it is several times faster than NATTEN's naive CPU kernel."""
+  fallback = getattr(natten_torch, name)
+
+  def call(first, *args):
+    if natten_kernels is not None and first.is_cuda:
+      return getattr(natten_kernels, name)(first, *args)
+    return fallback(first, *args)
+
+  return call
+
+
+natten1dqkrpb = _neighborhood_attention('natten1dqkrpb')
+natten1dav = _neighborhood_attention('natten1dav')
+natten2dqkrpb = _neighborhood_attention('natten2dqkrpb')
+natten2dav = _neighborhood_attention('natten2dav')
 
 
 # Copied from transformers.models.beit.modeling_beit.drop_path
