@@ -43,6 +43,12 @@ def _bias_start(index: int, length: int, kernel_size: int, dilation: int) -> int
 
 
 @functools.lru_cache(maxsize=64)
+def _axis_on(device, length: int, kernel_size: int, dilation: int):
+  """_axis, kept on the device, so that a call does not copy the tables again."""
+  return tuple(t.to(device) for t in _axis(length, kernel_size, dilation))
+
+
+@functools.lru_cache(maxsize=64)
 def _axis(length: int, kernel_size: int, dilation: int):
   """For each position along one axis: the positions of its neighbors, and the
   relative-position-bias entries that pair with them. Both [length, kernel_size]."""
@@ -52,6 +58,7 @@ def _axis(length: int, kernel_size: int, dilation: int):
   return starts[:, None] + steps * dilation, biases[:, None] + steps
 
 
+@functools.lru_cache(maxsize=64)
 def _plane(height: int, width: int, kernel_size: int, dilation: int, device):
   rows, row_bias = _axis(height, kernel_size, dilation)
   cols, col_bias = _axis(width, kernel_size, dilation)
@@ -65,15 +72,15 @@ def _plane(height: int, width: int, kernel_size: int, dilation: int, device):
 
 def natten1dqkrpb(query, key, rpb, kernel_size: int, dilation: int):
   """query, key: [B, heads, L, dim]; rpb: [heads, 2K-1]. Returns [B, heads, L, K]."""
-  neighbors, bias = (t.to(query.device) for t in _axis(query.shape[2], kernel_size, dilation))
+  neighbors, bias = _axis_on(query.device, query.shape[2], kernel_size, dilation)
   scores = torch.einsum('bhld,bhlkd->bhlk', query, key[:, :, neighbors])
   return scores + rpb[:, bias]
 
 
 def natten1dav(attn, value, kernel_size: int, dilation: int):
   """attn: [B, heads, L, K]; value: [B, heads, L, dim]. Returns [B, heads, L, dim]."""
-  neighbors, _ = _axis(value.shape[2], kernel_size, dilation)
-  return torch.einsum('bhlk,bhlkd->bhld', attn, value[:, :, neighbors.to(value.device)])
+  neighbors, _ = _axis_on(value.device, value.shape[2], kernel_size, dilation)
+  return torch.einsum('bhlk,bhlkd->bhld', attn, value[:, :, neighbors])
 
 
 def natten2dqkrpb(query, key, rpb, kernel_size: int, dilation: int):
