@@ -36,9 +36,13 @@ This package provides models for music structure analysis, predicting:
 
 Visit [PyTorch](https://pytorch.org/) and install the appropriate version for your system.
 
-### 2. Install NATTEN (Required for Linux and Windows; macOS will auto-install)
+### 2. Install NATTEN (optional; NVIDIA GPUs only)
+
+The model's neighborhood attention runs in plain PyTorch on the CPU and on Apple's MPS backend,
+so macOS and CPU-only systems need nothing here.
+[NATTEN](https://github.com/SHI-Labs/NATTEN) adds CUDA kernels; `allin1` uses them for CUDA tensors when
+a NATTEN release that still has `natten1dqkrpb` and its siblings (0.15 or earlier) is installed.
 * **Linux**: Download from [NATTEN website](https://www.shi-labs.com/natten/)
-* **macOS**: Auto-installs with `allin1`.
 * **Windows**: Build from source:
 ```shell
 pip install ninja # Recommended, not required
